@@ -4,6 +4,9 @@
   "type": "module",
   "private": true,
   "dependencies": {
-    "arsya-baileys-open": "^1.0.9"
+    "arsya-baileys-open": "1.0.9"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
   }
 }

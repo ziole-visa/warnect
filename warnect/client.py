@@ -1,32 +1,153 @@
 import json
 import os
+import queue
 import subprocess
 import threading
+import time
+import uuid
 from pathlib import Path
-from typing import Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
+
+from .exceptions import BridgeCrashed, BridgeError, BridgeTimeout
 
 
 class BaileysClient:
-    """Minimal Python client that talks to the Node bridge (arsya-baileys-open)."""
+    """Production-oriented Python client for arsya-baileys-open.
 
-    def __init__(self, auth_dir: str = "auth", bridge_script: str | None = None):
+    The client spawns a local Node.js bridge over stdio. No network port is
+    opened, so the bridge is not reachable from outside the host.
+    """
+
+    def __init__(
+        self,
+        auth_dir: str = "auth",
+        bridge_script: Optional[str] = None,
+        node_bin: str = "node",
+        log_level: str = "info",
+        request_timeout: float = 30.0,
+        min_send_interval: float = 0.5,
+        auto_install: bool = True,
+    ) -> None:
         if bridge_script is None:
             bridge_script = str(Path(__file__).resolve().parent / "bridge" / "server.js")
-        self.auth_dir = auth_dir
-        self.bridge_script = bridge_script
-        self.proc = None
+        self.auth_dir = str(auth_dir)
+        self.bridge_script = str(bridge_script)
+        self.node_bin = node_bin
+        self.log_level = log_level
+        self.request_timeout = request_timeout
+        self.min_send_interval = min_send_interval
+        self.auto_install = auto_install
+
+        self.proc: Optional[subprocess.Popen] = None
+        self._closed = False
+
         self._handlers: Dict[str, List[Callable]] = {}
-        self._reader_thread = None
+        self._pending: Dict[str, dict] = {}
+        self._pending_lock = threading.Lock()
+        self._write_lock = threading.Lock()
+        self._send_lock = threading.Lock()
+        self._last_sent_at = 0.0
+
+        self._dispatch_queue: "queue.Queue[tuple]" = queue.Queue()
+        self._dispatcher_thread: Optional[threading.Thread] = None
+        self._reader_thread: Optional[threading.Thread] = None
+        self._stderr_thread: Optional[threading.Thread] = None
+
+    # ------------------------------------------------------------------ events
 
     def on(self, event: str, callback: Callable) -> None:
+        """Register an event handler. Events: qr, connection, ready, message, error, reconnect."""
         self._handlers.setdefault(event, []).append(callback)
 
-    def _emit(self, event: str, data=None) -> None:
-        for cb in self._handlers.get(event, []):
+    def off(self, event: str, callback: Callable) -> None:
+        handlers = self._handlers.get(event)
+        if handlers and callback in handlers:
+            handlers.remove(callback)
+
+    def _emit(self, event: str, data: Any = None) -> None:
+        for cb in list(self._handlers.get(event, [])):
             try:
                 cb(data)
             except Exception as exc:  # pragma: no cover - user callback
-                print(f"[arsya-baileys] callback error: {exc}")
+                print(f"[warnect] callback error on {event}: {exc}")
+
+    def _dispatch_loop(self) -> None:
+        while not self._closed:
+            try:
+                event, data = self._dispatch_queue.get(timeout=0.5)
+            except queue.Empty:
+                continue
+            self._emit(event, data)
+
+    # ------------------------------------------------------------------ process
+
+    def _bridge_dir(self) -> Path:
+        return Path(self.bridge_script).resolve().parent
+
+    def _ensure_node_deps(self) -> None:
+        bridge_dir = self._bridge_dir()
+        # Custom bridge scripts (e.g. test doubles) may not use npm at all.
+        if not (bridge_dir / "package.json").exists():
+            return
+        marker = bridge_dir / "node_modules" / "arsya-baileys-open" / "package.json"
+        if marker.exists():
+            return
+        if not self.auto_install:
+            raise BridgeCrashed(
+                "Node dependencies are missing. Run `npm install` in " + str(bridge_dir)
+            )
+        print("[warnect] Installing Node dependencies (first run)...")
+        lockfile = bridge_dir / "package-lock.json"
+        cmd = ["npm", "ci", "--omit=dev", "--no-audit", "--no-fund"]
+        if not lockfile.exists():
+            cmd = ["npm", "install", "--omit=dev", "--no-audit", "--no-fund"]
+        try:
+            subprocess.run(cmd, cwd=str(bridge_dir), check=True, timeout=300)
+        except FileNotFoundError as exc:
+            raise BridgeCrashed("Node.js/npm is required but was not found in PATH") from exc
+        except subprocess.CalledProcessError as exc:
+            raise BridgeCrashed(f"npm install failed with exit code {exc.returncode}") from exc
+
+    def _sanitized_env(self) -> dict:
+        env = {
+            "PATH": os.environ.get("PATH", ""),
+            "HOME": os.environ.get("HOME", ""),
+            "NODE_ENV": "production",
+            "WARNECT_LOG_LEVEL": self.log_level,
+            "NO_COLOR": "1",
+        }
+        for key in ("SystemRoot", "TEMP", "TMP"):
+            if key in os.environ:
+                env[key] = os.environ[key]
+        return env
+
+    def start_bridge(self) -> None:
+        if self.proc is not None:
+            return
+        self._ensure_node_deps()
+        self._closed = False
+        self.proc = subprocess.Popen(
+            [self.node_bin, self.bridge_script, self.auth_dir, self.log_level],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            env=self._sanitized_env(),
+        )
+        self._dispatcher_thread = threading.Thread(target=self._dispatch_loop, daemon=True)
+        self._dispatcher_thread.start()
+        self._reader_thread = threading.Thread(target=self._read_loop, daemon=True)
+        self._reader_thread.start()
+        self._stderr_thread = threading.Thread(target=self._stderr_loop, daemon=True)
+        self._stderr_thread.start()
+
+    def _stderr_loop(self) -> None:
+        assert self.proc and self.proc.stderr
+        for line in self.proc.stderr:
+            line = line.rstrip()
+            if line:
+                print(line)
 
     def _read_loop(self) -> None:
         assert self.proc and self.proc.stdout
@@ -38,57 +159,157 @@ class BaileysClient:
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if "event" in obj:
-                self._emit(obj["event"], obj.get("data"))
-            elif "error" in obj:
-                self._emit("error", obj["error"])
+            kind = obj.get("type")
+            if kind == "event":
+                self._dispatch_queue.put((obj.get("event"), obj.get("data")))
+            elif kind == "response":
+                req_id = str(obj.get("id"))
+                with self._pending_lock:
+                    pending = self._pending.pop(req_id, None)
+                if pending:
+                    pending["response"] = obj
+                    pending["event"].set()
+        # process ended
+        with self._pending_lock:
+            pending = list(self._pending.values())
+            self._pending.clear()
+        for item in pending:
+            item["error"] = BridgeCrashed("bridge process exited")
+            item["event"].set()
+        if not self._closed:
+            self._dispatch_queue.put(("error", {"code": "bridge_exited", "message": "bridge process exited"}))
 
-    def _send(self, obj: dict) -> None:
+    # ------------------------------------------------------------------ rpc
+
+    def _send_raw(self, payload: dict) -> None:
         if not self.proc or not self.proc.stdin:
-            raise RuntimeError("bridge is not running")
-        self.proc.stdin.write(json.dumps(obj) + "\n")
-        self.proc.stdin.flush()
+            raise BridgeCrashed("bridge is not running")
+        data = json.dumps(payload) + "\n"
+        with self._write_lock:
+            self.proc.stdin.write(data)
+            self.proc.stdin.flush()
 
-    def _ensure_node_deps(self) -> None:
-        bridge_dir = Path(self.bridge_script).resolve().parent
-        marker = bridge_dir / "node_modules" / "arsya-baileys-open" / "package.json"
-        if marker.exists():
-            return
-        print("[arsya-baileys] Installing Node dependencies (first run)...")
+    def request(self, cmd: str, timeout: Optional[float] = None, **params: Any) -> Any:
+        """Send a request to the bridge and wait for the response."""
+        if self.proc is None:
+            self.start_bridge()
+        req_id = uuid.uuid4().hex
+        item: dict = {"event": threading.Event(), "response": None, "error": None}
+        with self._pending_lock:
+            self._pending[req_id] = item
         try:
-            subprocess.run(
-                ["npm", "install", "--no-audit", "--no-fund"],
-                cwd=str(bridge_dir),
-                check=True,
-                timeout=300,
-            )
-        except FileNotFoundError as exc:
-            raise RuntimeError("Node.js/npm is required but was not found in PATH") from exc
+            self._send_raw({"type": "request", "id": req_id, "cmd": cmd, **params})
+        except Exception:
+            with self._pending_lock:
+                self._pending.pop(req_id, None)
+            raise
+        if not item["event"].wait(timeout or self.request_timeout):
+            with self._pending_lock:
+                self._pending.pop(req_id, None)
+            raise BridgeTimeout(f"timeout waiting for response to {cmd}")
+        if item["error"]:
+            raise item["error"]
+        response = item["response"] or {}
+        if response.get("ok"):
+            return response.get("data")
+        error = response.get("error") or {}
+        raise BridgeError(error.get("code", "unknown"), error.get("message", "unknown error"))
 
-    def start(self) -> None:
-        if self.proc is not None:
+    # ------------------------------------------------------------------ api
+
+    def start(self, wait: bool = True, timeout: Optional[float] = None) -> Any:
+        self.start_bridge()
+        if not wait:
+            self._send_raw({"type": "request", "id": uuid.uuid4().hex, "cmd": "start"})
+            return None
+        return self.request("start", timeout=timeout)
+
+    def ping(self) -> Any:
+        return self.request("ping")
+
+    def send_text(self, jid: str, text: str) -> Any:
+        self._rate_limit()
+        return self.request("send_text", jid=jid, text=text)
+
+    def send_image(
+        self,
+        jid: str,
+        url: Optional[str] = None,
+        path: Optional[str] = None,
+        caption: Optional[str] = None,
+    ) -> Any:
+        if not url and not path:
+            raise ValueError("send_image requires url or path")
+        self._rate_limit()
+        payload: Dict[str, Any] = {"jid": jid}
+        if url:
+            payload["url"] = url
+        if path:
+            payload["path"] = path
+        if caption:
+            payload["caption"] = caption
+        return self.request("send_image", **payload)
+
+    def send_document(
+        self,
+        jid: str,
+        path: str,
+        filename: Optional[str] = None,
+        mimetype: Optional[str] = None,
+        caption: Optional[str] = None,
+    ) -> Any:
+        self._rate_limit()
+        payload: Dict[str, Any] = {"jid": jid, "path": path}
+        if filename:
+            payload["filename"] = filename
+        if mimetype:
+            payload["mimetype"] = mimetype
+        if caption:
+            payload["caption"] = caption
+        return self.request("send_document", **payload)
+
+    def get_groups(self, limit: int = 100) -> Any:
+        return self.request("get_groups", limit=limit)
+
+    def get_profile_picture(self, jid: str, type: str = "image") -> Any:
+        return self.request("get_profile_picture", jid=jid, type=type)
+
+    def is_on_whatsapp(self, number: str) -> Any:
+        return self.request("is_on_whatsapp", number=number)
+
+    def logout(self) -> Any:
+        return self.request("logout")
+
+    def _rate_limit(self) -> None:
+        if self.min_send_interval <= 0:
             return
-        self._ensure_node_deps()
-        self.proc = subprocess.Popen(
-            ["node", self.bridge_script, self.auth_dir],
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        )
-        self._reader_thread = threading.Thread(target=self._read_loop, daemon=True)
-        self._reader_thread.start()
-        self._send({"cmd": "start"})
-
-    def send_text(self, jid: str, text: str) -> None:
-        self._send({"cmd": "sendText", "jid": jid, "text": text})
+        with self._send_lock:
+            now = time.monotonic()
+            wait = self.min_send_interval - (now - self._last_sent_at)
+            if wait > 0:
+                time.sleep(wait)
+            self._last_sent_at = time.monotonic()
 
     def stop(self) -> None:
+        self._closed = True
+        if self.proc is None:
+            return
         try:
-            self._send({"cmd": "stop"})
+            self._send_raw({"type": "request", "id": uuid.uuid4().hex, "cmd": "stop"})
         except Exception:
             pass
-        if self.proc:
+        try:
             self.proc.terminate()
-            self.proc = None
+            self.proc.wait(timeout=5)
+        except Exception:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
+        self.proc = None
+
+    def __enter__(self) -> "BaileysClient":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.stop()

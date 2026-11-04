@@ -4,24 +4,35 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warnect"
-version = "0.1.0"
-description = "Python interface to arsya-baileys-open (WhatsApp Web) via a Node.js bridge"
+version = "0.2.0"
+description = "Python interface to arsya-baileys-open (WhatsApp Web) via a local Node.js bridge"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Arsya" }]
-keywords = ["whatsapp", "baileys", "warnect", "automation"]
+keywords = ["whatsapp", "baileys", "warnect", "automation", "bot"]
 classifiers = [
   "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
   "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
 ]
 
 [project.urls]
 Homepage = "https://github.com/ziole-visa/warnect"
+Repository = "https://github.com/ziole-visa/warnect"
+Issues = "https://github.com/ziole-visa/warnect/issues"
+Changelog = "https://github.com/ziole-visa/warnect/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3", "build", "twine"]
 
 [tool.setuptools]
 packages = ["warnect"]
 include-package-data = false
 
 [tool.setuptools.package-data]
-warnect = ["bridge/server.js", "bridge/package.json"]
+warnect = ["bridge/server.js", "bridge/package.json", "bridge/package-lock.json", "bridge/lib/*.js", "py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

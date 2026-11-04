@@ -1,26 +1,29 @@
 # warnect (Python)
 
-Python interface to **arsya-baileys-open** (WhatsApp Web multi-device) through a
-small Node.js bridge. It keeps the heavy WhatsApp protocol implementation in
-Node and exposes an easy Python API.
+Python client for WhatsApp Web multi-device, powered by **arsya-baileys-open**
+through a local Node.js bridge.
+
+- No browser, no Selenium.
+- Bridge talks over stdio only — no TCP port is exposed.
+- Session directory is created with `0700` permissions.
+- Inputs validated, sends rate-limited, auto-reconnect with backoff.
 
 ## Requirements
 
 - Python >= 3.10
-- Node.js >= 20
-- npm
+- Node.js >= 20 and npm
+
+## Install
+
+```bash
+pip install warnect
+```
 
 Node dependencies are installed automatically on first run. To install manually:
 
 ```bash
-cd warnect/bridge
-npm install
-```
-
-## Python install
-
-```bash
-pip install -e .
+python -c "import warnect, pathlib; print(pathlib.Path(warnect.__file__).parent / 'bridge')"
+cd <that-folder> && npm ci --omit=dev
 ```
 
 ## Quick start
@@ -31,23 +34,90 @@ from warnect import BaileysClient
 client = BaileysClient(auth_dir="auth")
 
 def on_qr(qr):
-    print("QR:", qr)
+    print("Scan QR:", qr)
+
+def on_ready(data):
+    print("Connected as:", data.get("user"))
 
 def on_message(msg):
     print("Pesan:", msg.get("text"))
     if msg.get("text") == "ping":
-        client.send_text(msg["key"]["remoteJid"], "pong")
+        client.send_text(msg["chat"], "pong")
 
 client.on("qr", on_qr)
+client.on("ready", on_ready)
 client.on("message", on_message)
 client.start()
 
-input("Press Enter to stop...\n")
+input("Bot jalan. Tekan Enter untuk stop...\n")
 client.stop()
 ```
 
-## Notes
+## Events
 
-- This is an early alpha. Only text send/receive and QR login are supported.
-- Media, groups, and advanced features will be added incrementally.
-- Bridge runs `arsya-baileys-open` under the hood.
+| Event        | Data                                          |
+| ------------ | --------------------------------------------- |
+| `qr`         | QR string (render/save it yourself)           |
+| `connection` | `{ "status": "connecting" \| "open" \| "close" }` |
+| `ready`      | `{ "user": {...} }`                            |
+| `message`    | normalized message object                      |
+| `error`      | `{ "code": "...", "message": "..." }`          |
+| `reconnect`  | `{ "attempt": n, "delay": ms }`                |
+
+## Message object
+
+```python
+{
+  "id": "...",
+  "chat": "123@s.whatsapp.net",
+  "sender": "...",
+  "fromMe": False,
+  "isGroup": False,
+  "type": "conversation",
+  "text": "halo",
+  "pushName": "Budi",
+  "timestamp": 1730000000,
+  "hasMedia": False,
+  "fileName": None,
+  "mimetype": None,
+}
+```
+
+## API
+
+| Method | Description |
+| ------ | ----------- |
+| `start(wait=True)` | Start bridge and socket |
+| `ping()` | Health check |
+| `send_text(jid, text)` | Send text |
+| `send_image(jid, url=..., path=..., caption=...)` | Send image |
+| `send_document(jid, path, filename=..., mimetype=..., caption=...)` | Send document |
+| `get_groups(limit=100)` | List groups |
+| `get_profile_picture(jid, type="image")` | Profile picture URL |
+| `is_on_whatsapp(number)` | Check number |
+| `logout()` | Log out session |
+| `stop()` | Stop bridge |
+
+## Errors
+
+```python
+from warnect import BridgeError, BridgeTimeout, BridgeCrashed
+
+try:
+    client.send_text("123@s.whatsapp.net", "hi")
+except BridgeTimeout:
+    ...
+except BridgeError as exc:
+    print(exc.code, exc.message)
+```
+
+## Security notes
+
+- The bridge uses local stdio; it does not open a network port.
+- Node dependencies are pinned in `package-lock.json` and installed with `npm ci`.
+- Keep `auth_dir` private; it contains WhatsApp session credentials.
+- Use `min_send_interval` (default `0.5`s) to avoid spamming.
+
+## License
+
+MIT

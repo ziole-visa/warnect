@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "warnect"
+version = "0.1.0"
+description = "Python interface to arsya-baileys-open (WhatsApp Web) via a Node.js bridge"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Arsya" }]
+keywords = ["whatsapp", "baileys", "warnect", "automation"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.urls]
+Homepage = "https://github.com/ziole-visa/warnect"
+
+[tool.setuptools]
+packages = ["warnect"]
+include-package-data = false
+
+[tool.setuptools.package-data]
+warnect = ["bridge/server.js", "bridge/package.json"]

@@ -1,0 +1,9 @@
+{
+  "name": "warnect-bridge",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "arsya-baileys-open": "^1.0.9"
+  }
+}

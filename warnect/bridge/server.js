@@ -1,4 +1,4 @@
-import { makeWASocket, useMultiFileAuthState, DisconnectReason, getContentType } from 'arsya-baileys-open';
+import { makeWASocket, useMultiFileAuthState, DisconnectReason, getContentType, downloadMediaMessage } from 'arsya-baileys-open';
 import readline from 'node:readline';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,6 +8,9 @@ import { createEmitter, respond, respondError, parseLine } from './lib/protocol.
 const authDir = path.resolve(process.argv[2] || './auth');
 const LOG_LEVELS = { error: 0, warn: 1, info: 2, debug: 3 };
 const logLevel = LOG_LEVELS[(process.argv[3] || process.env.WARNECT_LOG_LEVEL || 'info').toLowerCase()] ?? 2;
+
+const MESSAGE_STORE_LIMIT = 500;
+const messageStore = new Map();
 
 let sock = null;
 let stopping = false;
@@ -41,6 +44,16 @@ function extractText(msg) {
   if (type === 'imageMessage' || type === 'videoMessage') return content.caption ?? null;
   if (type === 'documentMessage') return content.caption ?? content.fileName ?? null;
   return null;
+}
+
+function storeMessage(msg) {
+  const id = msg?.key?.id;
+  if (!id) return;
+  messageStore.set(id, msg);
+  if (messageStore.size > MESSAGE_STORE_LIMIT) {
+    const oldest = messageStore.keys().next().value;
+    if (oldest !== undefined) messageStore.delete(oldest);
+  }
 }
 
 function parseIncoming(msg) {
@@ -109,6 +122,7 @@ async function connect() {
       for (const msg of event.messages || []) {
         if (!msg?.message) continue;
         try {
+          storeMessage(msg);
           emit('message', parseIncoming(msg));
         } catch (e) {
           emit('error', { code: 'message_parse_failed', message: String(e?.message || e) });
@@ -204,7 +218,7 @@ async function handleCommand(req) {
       case 'get_profile_picture': {
         if (!sock) throw new Error('socket not started');
         validateJid(req.jid);
-        const url = await sock.profilePictureUrl(req.jid, req.type || 'image');
+        const url = await sock.profilePictureUrl(req.jid, req.pictureType || 'image');
         respond(writeLine, id, { url: url || null });
         break;
       }
@@ -213,6 +227,48 @@ async function handleCommand(req) {
         if (!/^\d{6,20}$/.test(String(req.number || ''))) throw new Error('invalid number');
         const [result] = await sock.onWhatsApp(req.number);
         respond(writeLine, id, { exists: !!result?.exists, jid: result?.jid || null });
+        break;
+      }
+      case 'request_pairing_code': {
+        if (!sock) throw new Error('socket not started');
+        const number = String(req.number || '').replace(/\D/g, '');
+        if (!/^\d{6,20}$/.test(number)) throw new Error('invalid number');
+        const code = await sock.requestPairingCode(number, req.customCode || undefined);
+        respond(writeLine, id, { code });
+        break;
+      }
+      case 'send_presence': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const allowed = new Set(['composing', 'recording', 'paused', 'available', 'unavailable']);
+        if (!allowed.has(req.presence)) throw new Error('invalid presence');
+        await sock.sendPresenceUpdate(req.presence, req.jid);
+        respond(writeLine, id, { presence: req.presence, jid: req.jid });
+        break;
+      }
+      case 'send_read': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        if (!req.messageId) throw new Error('message id is required');
+        await sock.readMessages([{ remoteJid: req.jid, id: req.messageId, participant: req.participant }]);
+        respond(writeLine, id, { read: true, messageId: req.messageId });
+        break;
+      }
+      case 'download_media': {
+        if (!sock) throw new Error('socket not started');
+        const raw = messageStore.get(req.messageId);
+        if (!raw) throw new Error('message not found in local store');
+        const buffer = await downloadMediaMessage(raw, 'buffer', {});
+        if (!buffer || !buffer.length) throw new Error('media download failed');
+        const type = getContentType(raw.message || {});
+        const content = type ? raw.message[type] : null;
+        respond(writeLine, id, {
+          base64: buffer.toString('base64'),
+          size: buffer.length,
+          mimetype: content?.mimetype || null,
+          fileName: content?.fileName || null,
+          type: type || null,
+        });
         break;
       }
       case 'logout': {

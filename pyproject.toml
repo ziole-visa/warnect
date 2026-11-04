@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warnect"
-version = "0.2.0"
+version = "0.3.0"
 description = "Python interface to arsya-baileys-open (WhatsApp Web) via a local Node.js bridge"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,8 +24,11 @@ Repository = "https://github.com/ziole-visa/warnect"
 Issues = "https://github.com/ziole-visa/warnect/issues"
 Changelog = "https://github.com/ziole-visa/warnect/blob/main/CHANGELOG.md"
 
+[project.scripts]
+warnect = "warnect.__main__:main"
+
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "pytest-timeout>=2.3", "build", "twine"]
+dev = ["pytest>=8.0", "pytest-timeout>=2.3", "pytest-asyncio>=0.23", "build", "twine"]
 
 [tool.setuptools]
 packages = ["warnect"]
@@ -36,3 +39,4 @@ warnect = ["bridge/server.js", "bridge/package.json", "bridge/package-lock.json"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"

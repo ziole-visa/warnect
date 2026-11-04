@@ -92,11 +92,54 @@ client.stop()
 | `send_text(jid, text)` | Send text |
 | `send_image(jid, url=..., path=..., caption=...)` | Send image |
 | `send_document(jid, path, filename=..., mimetype=..., caption=...)` | Send document |
+| `request_pairing_code(number)` | Pairing code login |
+| `send_presence(jid, presence)` | typing/paused/available |
+| `send_read(jid, message_id)` | Mark message as read |
+| `download_media(message_id)` | Download incoming media (bytes) |
 | `get_groups(limit=100)` | List groups |
 | `get_profile_picture(jid, type="image")` | Profile picture URL |
 | `is_on_whatsapp(number)` | Check number |
 | `logout()` | Log out session |
 | `stop()` | Stop bridge |
+
+## Async API
+
+```python
+import asyncio
+from warnect import AsyncBaileysClient
+
+async def main():
+    client = AsyncBaileysClient(auth_dir="auth")
+
+    async def on_message(msg):
+        if msg.get("text") == "ping":
+            await client.send_text(msg["chat"], "pong")
+
+    client.on("message", on_message)
+    await client.start()
+    await asyncio.sleep(3600)
+    await client.stop()
+
+asyncio.run(main())
+```
+
+## CLI
+
+```bash
+warnect qr --auth-dir auth          # tampilkan QR
+warnect pair --auth-dir auth --number 6281234567890
+warnect send --auth-dir auth --to 62812xxx@s.whatsapp.net --text "hai"
+warnect run --auth-dir auth         # jalankan + print event
+```
+
+## Media download
+
+```python
+def on_message(msg):
+    if msg.get("hasMedia"):
+        data = client.download_media(msg["id"])
+        open("download.bin", "wb").write(data)
+```
 
 ## Errors
 

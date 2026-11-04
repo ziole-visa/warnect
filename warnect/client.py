@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import queue
@@ -268,11 +269,33 @@ class BaileysClient:
             payload["caption"] = caption
         return self.request("send_document", **payload)
 
+    def request_pairing_code(self, number: str, custom_code: Optional[str] = None) -> Any:
+        payload: Dict[str, Any] = {"number": number}
+        if custom_code:
+            payload["customCode"] = custom_code
+        return self.request("request_pairing_code", **payload)
+
+    def send_presence(self, jid: str, presence: str) -> Any:
+        return self.request("send_presence", jid=jid, presence=presence)
+
+    def send_read(self, jid: str, message_id: str, participant: Optional[str] = None) -> Any:
+        payload: Dict[str, Any] = {"jid": jid, "messageId": message_id}
+        if participant:
+            payload["participant"] = participant
+        return self.request("send_read", **payload)
+
+    def download_media(self, message_id: str) -> bytes:
+        data = self.request("download_media", messageId=message_id)
+        raw = data.get("base64") if isinstance(data, dict) else None
+        if not raw:
+            raise BridgeError("no_media", "media download returned empty payload")
+        return base64.b64decode(raw)
+
     def get_groups(self, limit: int = 100) -> Any:
         return self.request("get_groups", limit=limit)
 
     def get_profile_picture(self, jid: str, type: str = "image") -> Any:
-        return self.request("get_profile_picture", jid=jid, type=type)
+        return self.request("get_profile_picture", jid=jid, pictureType=type)
 
     def is_on_whatsapp(self, number: str) -> Any:
         return self.request("is_on_whatsapp", number=number)

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0
+
+- `AsyncBaileysClient` (asyncio wrapper, coroutine event callbacks).
+- Media download for incoming messages (`download_media`).
+- Pairing code login (`request_pairing_code`).
+- Presence and read receipts (`send_presence`, `send_read`).
+- CLI: `warnect qr|pair|send|run`.
+- Async bot example.
+- More tests (async client, media, presence, read, profile picture).
+
 ## 0.2.0
 
 Production hardening release.

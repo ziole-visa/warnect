@@ -54,6 +54,17 @@ def test_unknown_command_raises(client):
     assert exc.value.code == "unknown_command"
 
 
+def test_extra_commands(client):
+    client.start()
+    assert client.request_pairing_code("6281234567890")["code"] == "ABCD-1234"
+    assert client.send_presence("123@s.whatsapp.net", "composing")["presence"] == "composing"
+    assert client.send_read("123@s.whatsapp.net", "MSG1")["read"] is True
+    assert client.download_media("MSG1") == b"media-bytes"
+    assert client.get_profile_picture("123@s.whatsapp.net")["url"] == "https://example.com/p.jpg"
+    assert client.get_groups()["total"] == 0
+    assert client.is_on_whatsapp("6281234567890")["exists"] is True
+
+
 def test_timeout(client):
     client.start()
     with pytest.raises(BridgeTimeout):

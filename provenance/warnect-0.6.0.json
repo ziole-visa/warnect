@@ -1,0 +1,54 @@
+{
+  "_type": "https://in-toto.io/Statement/v1",
+  "subject": [
+    {
+      "name": "warnect-0.6.0-py3-none-any.whl",
+      "digest": {
+        "sha256": "f78d790a390c47110419a1c45307bda9b21cb523a1b7008ea24c1f25c3aa976f"
+      },
+      "size": 31691
+    },
+    {
+      "name": "warnect-0.6.0.tar.gz",
+      "digest": {
+        "sha256": "301b5723aac827ff3ac7138616e555e1e89415ac1f6f629f3e36cb200573528c"
+      },
+      "size": 33077
+    }
+  ],
+  "predicateType": "https://slsa.dev/provenance/v1",
+  "predicate": {
+    "buildDefinition": {
+      "buildType": "https://github.com/ziole-visa/warnect/build@v1",
+      "externalParameters": {
+        "repository": "https://github.com/ziole-visa/warnect",
+        "ref": "refs/tags/v0.6.0",
+        "commit": "6019d3c94384a42595302d454662373432c69999"
+      },
+      "internalParameters": {
+        "python": "3.13",
+        "node": "22",
+        "npm_ci": true
+      },
+      "resolvedDependencies": [
+        {
+          "uri": "https://github.com/ziole-visa/warnect",
+          "digest": {
+            "gitCommit": "6019d3c94384a42595302d454662373432c69999"
+          }
+        }
+      ]
+    },
+    "runDetails": {
+      "builder": {
+        "id": "https://github.com/ziole-visa/warnect/.github/workflows/publish.yml@refs/tags/v0.6.0"
+      },
+      "buildMetadata": {
+        "invocationId": "6019d3c94384a42595302d454662373432c69999",
+        "startedOn": "2026-11-06T00:00:00Z",
+        "finishedOn": "2026-11-06T00:00:00Z"
+      },
+      "byproducts": []
+    }
+  }
+}

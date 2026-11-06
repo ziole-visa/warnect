@@ -5,6 +5,7 @@ import time
 
 from .client import BaileysClient
 from .exceptions import BridgeError
+from .http_server import WarnectHTTPServer
 
 
 def _wait(event: threading.Event, timeout: float, label: str) -> bool:
@@ -82,6 +83,28 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_serve(args: argparse.Namespace) -> int:
+    client = BaileysClient(auth_dir=args.auth_dir, log_level=args.log_level)
+    server = WarnectHTTPServer(
+        client,
+        host=args.host,
+        port=args.port,
+        token=args.token,
+        webhook_url=args.webhook,
+    )
+    client.on("qr", lambda qr: print("QR:", qr))
+    client.on("ready", lambda data: print("ready:", data))
+    client.on("connection", lambda data: print("connection:", data))
+    client.on("error", lambda data: print("error:", data))
+    try:
+        server.start()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.stop()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="warnect", description="warnect WhatsApp client")
     parser.add_argument("--auth-dir", default="auth")
@@ -101,7 +124,15 @@ def build_parser() -> argparse.ArgumentParser:
     send.set_defaults(func=cmd_send)
 
     sub.add_parser("run", help="run and print events").set_defaults(func=cmd_run)
+
+    serve = sub.add_parser("serve", help="run HTTP API + webhook bridge")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", type=int, default=8080)
+    serve.add_argument("--token", default=None, help="Bearer token for /send")
+    serve.add_argument("--webhook", default=None, help="Webhook URL for incoming messages")
+    serve.set_defaults(func=cmd_serve)
     return parser
+
 
 
 def main(argv=None) -> int:

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.0
+
+- HTTP API mode: `warnect serve` (health, send, QR endpoints) with bearer token auth.
+- Webhook delivery for incoming messages.
+- 10 Python tests (HTTP server coverage).
+- Node tests unchanged (9).
+
 ## 0.3.0
 
 - `AsyncBaileysClient` (asyncio wrapper, coroutine event callbacks).

@@ -101,6 +101,13 @@ client.stop()
 | `get_groups(limit=100)` | List groups |
 | `get_profile_picture(jid, type="image")` | Profile picture URL |
 | `is_on_whatsapp(number)` | Check number |
+| `group_create(subject, participants)` | Create group |
+| `group_add_participants(jid, participants)` | Add members |
+| `group_remove_participants(jid, participants)` | Remove members |
+| `group_promote(jid, participants)` | Promote |
+| `group_demote(jid, participants)` | Demote |
+| `group_leave(jid)` | Leave group |
+| `group_invite_code(jid)` | Get invite code |
 | `logout()` | Log out session |
 | `stop()` | Stop bridge |
 
@@ -162,6 +169,28 @@ except BridgeError as exc:
 - Node dependencies are pinned in `package-lock.json` and installed with `npm ci`.
 - Keep `auth_dir` private; it contains WhatsApp session credentials.
 - Use `min_send_interval` (default `0.5`s) to avoid spamming.
+
+## Multi-session
+
+```python
+from warnect import SessionManager
+
+manager = SessionManager()
+manager.add_session("bot1", "auth-bot1")
+manager.add_session("bot2", "auth-bot2")
+manager.start_all()
+
+manager.send_text("bot1", "123@s.whatsapp.net", "from bot1")
+manager.stop_all()
+```
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+The `auth/` directory is mounted as a volume so sessions persist.
 
 ## License
 

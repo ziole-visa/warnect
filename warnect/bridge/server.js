@@ -292,6 +292,87 @@ async function handleCommand(req) {
         respond(writeLine, id, { sent: true, jid: req.jid, quoted: !!quoted });
         break;
       }
+      case 'group_create': {
+        if (!sock) throw new Error('socket not started');
+        if (typeof req.subject !== 'string' || !req.subject) throw new Error('subject is required');
+        const participants = Array.isArray(req.participants) ? req.participants : [];
+        participants.forEach(validateJid);
+        const created = await sock.groupCreate(req.subject, participants);
+        respond(writeLine, id, { group: created });
+        break;
+      }
+      case 'group_update_subject': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        if (typeof req.subject !== 'string' || !req.subject) throw new Error('subject is required');
+        await sock.groupUpdateSubject(req.jid, req.subject);
+        respond(writeLine, id, { updated: true, jid: req.jid });
+        break;
+      }
+      case 'group_update_description': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        await sock.groupUpdateDescription(req.jid, req.description || '');
+        respond(writeLine, id, { updated: true, jid: req.jid });
+        break;
+      }
+      case 'group_add_participants': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const participants = Array.isArray(req.participants) ? req.participants : [];
+        participants.forEach(validateJid);
+        const result = await sock.groupParticipantsUpdate(req.jid, participants, 'add');
+        respond(writeLine, id, { result });
+        break;
+      }
+      case 'group_remove_participants': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const participants = Array.isArray(req.participants) ? req.participants : [];
+        participants.forEach(validateJid);
+        const result = await sock.groupParticipantsUpdate(req.jid, participants, 'remove');
+        respond(writeLine, id, { result });
+        break;
+      }
+      case 'group_promote': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const participants = Array.isArray(req.participants) ? req.participants : [];
+        participants.forEach(validateJid);
+        const result = await sock.groupParticipantsUpdate(req.jid, participants, 'promote');
+        respond(writeLine, id, { result });
+        break;
+      }
+      case 'group_demote': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const participants = Array.isArray(req.participants) ? req.participants : [];
+        participants.forEach(validateJid);
+        const result = await sock.groupParticipantsUpdate(req.jid, participants, 'demote');
+        respond(writeLine, id, { result });
+        break;
+      }
+      case 'group_leave': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        await sock.groupLeave(req.jid);
+        respond(writeLine, id, { left: true, jid: req.jid });
+        break;
+      }
+      case 'group_invite_code': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const code = await sock.groupInviteCode(req.jid);
+        respond(writeLine, id, { code });
+        break;
+      }
+      case 'group_revoke_invite': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        const code = await sock.groupRevokeInvite(req.jid);
+        respond(writeLine, id, { code });
+        break;
+      }
       case 'logout': {
         if (sock) await sock.logout();
         respond(writeLine, id, { loggedOut: true });

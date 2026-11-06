@@ -229,9 +229,21 @@ class BaileysClient:
     def ping(self) -> Any:
         return self.request("ping")
 
+    def _retry_request(self, cmd: str, attempts: int = 3, **params: Any) -> Any:
+        last: Optional[Exception] = None
+        for attempt in range(attempts):
+            try:
+                return self.request(cmd, **params)
+            except (BridgeError, BridgeTimeout) as exc:
+                last = exc
+                if attempt < attempts - 1:
+                    time.sleep(0.5 * (2 ** attempt))
+        assert last is not None
+        raise last
+
     def send_text(self, jid: str, text: str) -> Any:
         self._rate_limit(jid)
-        return self.request("send_text", jid=jid, text=text)
+        return self._retry_request("send_text", jid=jid, text=text)
 
     def send_image(
         self,
@@ -250,7 +262,7 @@ class BaileysClient:
             payload["path"] = path
         if caption:
             payload["caption"] = caption
-        return self.request("send_image", **payload)
+        return self._retry_request("send_image", **payload)
 
     def send_document(
         self,
@@ -268,7 +280,7 @@ class BaileysClient:
             payload["mimetype"] = mimetype
         if caption:
             payload["caption"] = caption
-        return self.request("send_document", **payload)
+        return self._retry_request("send_document", **payload)
 
     def request_pairing_code(self, number: str, custom_code: Optional[str] = None) -> Any:
         payload: Dict[str, Any] = {"number": number}
@@ -296,12 +308,42 @@ class BaileysClient:
         payload: Dict[str, Any] = {"jid": jid, "emoji": emoji, "messageId": message_id, "fromMe": from_me}
         if participant:
             payload["participant"] = participant
-        return self.request("send_reaction", **payload)
+        return self._retry_request("send_reaction", **payload)
 
     def reply_message(self, jid: str, text: str, quoted_id: str) -> Any:
         validate_text = text
         self._rate_limit(jid)
-        return self.request("reply_message", jid=jid, text=text, quotedId=quoted_id)
+        return self._retry_request("reply_message", jid=jid, text=text, quotedId=quoted_id)
+
+    def group_create(self, subject: str, participants: list[str]) -> Any:
+        return self.request("group_create", subject=subject, participants=participants)
+
+    def group_update_subject(self, jid: str, subject: str) -> Any:
+        return self.request("group_update_subject", jid=jid, subject=subject)
+
+    def group_update_description(self, jid: str, description: str) -> Any:
+        return self.request("group_update_description", jid=jid, description=description)
+
+    def group_add_participants(self, jid: str, participants: list[str]) -> Any:
+        return self.request("group_add_participants", jid=jid, participants=participants)
+
+    def group_remove_participants(self, jid: str, participants: list[str]) -> Any:
+        return self.request("group_remove_participants", jid=jid, participants=participants)
+
+    def group_promote(self, jid: str, participants: list[str]) -> Any:
+        return self.request("group_promote", jid=jid, participants=participants)
+
+    def group_demote(self, jid: str, participants: list[str]) -> Any:
+        return self.request("group_demote", jid=jid, participants=participants)
+
+    def group_leave(self, jid: str) -> Any:
+        return self.request("group_leave", jid=jid)
+
+    def group_invite_code(self, jid: str) -> Any:
+        return self.request("group_invite_code", jid=jid)
+
+    def group_revoke_invite(self, jid: str) -> Any:
+        return self.request("group_revoke_invite", jid=jid)
 
     def get_groups(self, limit: int = 100) -> Any:
         return self.request("get_groups", limit=limit)

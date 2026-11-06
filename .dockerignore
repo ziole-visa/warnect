@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+warnect/bridge/node_modules/
+.git/
+tests/
+examples/

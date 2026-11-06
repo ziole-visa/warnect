@@ -40,6 +40,10 @@ rl.on('line', (line) => {
     write({ type: 'response', id, ok: true, data: { reacted: true, messageId: req.messageId } });
   } else if (cmd === 'reply_message') {
     write({ type: 'response', id, ok: true, data: { sent: true, jid: req.jid, quoted: !!req.quotedId } });
+  } else if (cmd === 'group_create') {
+    write({ type: 'response', id, ok: true, data: { group: { id: '123@g.us', subject: req.subject } } });
+  } else if (cmd === 'group_add_participants') {
+    write({ type: 'response', id, ok: true, data: { result: [{ status: '200' }] } });
   } else if (cmd === 'slow') {
     // intentionally never responds
   } else if (cmd === 'stop') {

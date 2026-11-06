@@ -11,6 +11,7 @@ import hmac
 import json
 import os
 import queue
+import time
 import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -63,22 +64,26 @@ class WarnectHTTPServer:
             data = self._webhook_queue.get()
             if data is None:
                 break
-            try:
-                body = json.dumps({"event": "message", "data": data}).encode("utf-8")
-                headers = {"Content-Type": "application/json"}
-                if self.webhook_secret:
-                    sig = hmac.new(self.webhook_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
-                    headers["X-Warnect-Signature"] = f"sha256={sig}"
-                req = urllib.request.Request(
-                    str(self.webhook_url),
-                    data=body,
-                    headers=headers,
-                    method="POST",
-                )
-                with urllib.request.urlopen(req, timeout=10):
-                    pass
-            except Exception as exc:  # pragma: no cover - network dependent
-                print(f"[warnect-http] webhook delivery failed: {exc}")
+            body = json.dumps({"event": "message", "data": data}).encode("utf-8")
+            headers = {"Content-Type": "application/json"}
+            if self.webhook_secret:
+                sig = hmac.new(self.webhook_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+                headers["X-Warnect-Signature"] = f"sha256={sig}"
+            for attempt in range(3):
+                try:
+                    req = urllib.request.Request(
+                        str(self.webhook_url),
+                        data=body,
+                        headers=headers,
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(req, timeout=10):
+                        break
+                except Exception as exc:  # pragma: no cover - network dependent
+                    if attempt == 2:
+                        print(f"[warnect-http] webhook delivery failed: {exc}")
+                    else:
+                        time.sleep(0.5 * (2 ** attempt))
 
     def start(self) -> None:
         self.client.start()

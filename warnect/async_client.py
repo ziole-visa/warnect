@@ -70,6 +70,15 @@ class AsyncBaileysClient:
     async def reply_message(self, jid: str, text: str, quoted_id: str) -> Any:
         return await asyncio.to_thread(self._client.reply_message, jid, text, quoted_id)
 
+    async def send_reaction(self, jid: str, emoji: str, message_id: str, from_me: bool = False, participant: Optional[str] = None) -> Any:
+        return await asyncio.to_thread(self._client.send_reaction, jid, emoji, message_id, from_me, participant)
+
+    async def reply_message(self, jid: str, text: str, quoted_id: str) -> Any:
+        return await asyncio.to_thread(self._client.reply_message, jid, text, quoted_id)
+
+    async def group_create(self, subject: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_create, subject, participants)
+
     async def get_groups(self, limit: int = 100) -> Any:
         return await asyncio.to_thread(self._client.get_groups, limit)
 

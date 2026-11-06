@@ -1,0 +1,10 @@
+services:
+  warnect:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./auth:/app/auth
+    environment:
+      - WARNECT_LOG_LEVEL=info
+    restart: unless-stopped

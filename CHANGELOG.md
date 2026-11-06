@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.6.0
+
+- Multi-session manager (`SessionManager`) for running many accounts in one process.
+- Group management APIs: create/update subject/description, add/remove/promote/demote, leave, invite code/revoke.
+- Docker support (`Dockerfile`, `docker-compose.yml`).
+- Webhook retry with exponential backoff.
+- Per-chat rate limiting and send retry.
+- 11 Python tests + 9 Node tests.
+
 ## 0.5.0
 
 - New APIs: `send_reaction`, `reply_message`.

@@ -65,6 +65,8 @@ def test_extra_commands(client):
     assert client.is_on_whatsapp("6281234567890")["exists"] is True
     assert client.send_reaction("123@s.whatsapp.net", "👍", "MSG1")["reacted"] is True
     assert client.reply_message("123@s.whatsapp.net", "balas", "MSG1")["quoted"] is True
+    assert client.group_create("Grup", ["123@s.whatsapp.net"])["group"]["id"] == "123@g.us"
+    assert client.group_add_participants("123@g.us", ["456@s.whatsapp.net"])["result"]
 
 
 def test_timeout(client):

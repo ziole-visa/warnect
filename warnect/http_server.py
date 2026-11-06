@@ -6,6 +6,8 @@ and receive incoming messages through a webhook.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import json
 import os
 import queue
@@ -26,12 +28,14 @@ class WarnectHTTPServer:
         port: int = 8080,
         token: Optional[str] = None,
         webhook_url: Optional[str] = None,
+        webhook_secret: Optional[str] = None,
     ) -> None:
         self.client = client
         self.host = host
         self.port = port
         self.token = token
         self.webhook_url = webhook_url
+        self.webhook_secret = webhook_secret
 
         self._connected = False
         self._last_qr: Optional[str] = None
@@ -61,10 +65,14 @@ class WarnectHTTPServer:
                 break
             try:
                 body = json.dumps({"event": "message", "data": data}).encode("utf-8")
+                headers = {"Content-Type": "application/json"}
+                if self.webhook_secret:
+                    sig = hmac.new(self.webhook_secret.encode("utf-8"), body, hashlib.sha256).hexdigest()
+                    headers["X-Warnect-Signature"] = f"sha256={sig}"
                 req = urllib.request.Request(
                     str(self.webhook_url),
                     data=body,
-                    headers={"Content-Type": "application/json"},
+                    headers=headers,
                     method="POST",
                 )
                 with urllib.request.urlopen(req, timeout=10):

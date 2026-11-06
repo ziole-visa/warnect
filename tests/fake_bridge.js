@@ -36,6 +36,10 @@ rl.on('line', (line) => {
     write({ type: 'response', id, ok: true, data: { groups: [], total: 0 } });
   } else if (cmd === 'is_on_whatsapp') {
     write({ type: 'response', id, ok: true, data: { exists: true, jid: '123@s.whatsapp.net' } });
+  } else if (cmd === 'send_reaction') {
+    write({ type: 'response', id, ok: true, data: { reacted: true, messageId: req.messageId } });
+  } else if (cmd === 'reply_message') {
+    write({ type: 'response', id, ok: true, data: { sent: true, jid: req.jid, quoted: !!req.quotedId } });
   } else if (cmd === 'slow') {
     // intentionally never responds
   } else if (cmd === 'stop') {

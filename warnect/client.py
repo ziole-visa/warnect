@@ -48,6 +48,7 @@ class BaileysClient:
         self._write_lock = threading.Lock()
         self._send_lock = threading.Lock()
         self._last_sent_at = 0.0
+        self._last_sent_per_chat: Dict[str, float] = {}
 
         self._dispatch_queue: "queue.Queue[tuple]" = queue.Queue()
         self._dispatcher_thread: Optional[threading.Thread] = None
@@ -229,7 +230,7 @@ class BaileysClient:
         return self.request("ping")
 
     def send_text(self, jid: str, text: str) -> Any:
-        self._rate_limit()
+        self._rate_limit(jid)
         return self.request("send_text", jid=jid, text=text)
 
     def send_image(
@@ -241,7 +242,7 @@ class BaileysClient:
     ) -> Any:
         if not url and not path:
             raise ValueError("send_image requires url or path")
-        self._rate_limit()
+        self._rate_limit(jid)
         payload: Dict[str, Any] = {"jid": jid}
         if url:
             payload["url"] = url
@@ -259,7 +260,7 @@ class BaileysClient:
         mimetype: Optional[str] = None,
         caption: Optional[str] = None,
     ) -> Any:
-        self._rate_limit()
+        self._rate_limit(jid)
         payload: Dict[str, Any] = {"jid": jid, "path": path}
         if filename:
             payload["filename"] = filename
@@ -291,6 +292,17 @@ class BaileysClient:
             raise BridgeError("no_media", "media download returned empty payload")
         return base64.b64decode(raw)
 
+    def send_reaction(self, jid: str, emoji: str, message_id: str, from_me: bool = False, participant: Optional[str] = None) -> Any:
+        payload: Dict[str, Any] = {"jid": jid, "emoji": emoji, "messageId": message_id, "fromMe": from_me}
+        if participant:
+            payload["participant"] = participant
+        return self.request("send_reaction", **payload)
+
+    def reply_message(self, jid: str, text: str, quoted_id: str) -> Any:
+        validate_text = text
+        self._rate_limit(jid)
+        return self.request("reply_message", jid=jid, text=text, quotedId=quoted_id)
+
     def get_groups(self, limit: int = 100) -> Any:
         return self.request("get_groups", limit=limit)
 
@@ -303,15 +315,19 @@ class BaileysClient:
     def logout(self) -> Any:
         return self.request("logout")
 
-    def _rate_limit(self) -> None:
+    def _rate_limit(self, jid: Optional[str] = None) -> None:
         if self.min_send_interval <= 0:
             return
         with self._send_lock:
             now = time.monotonic()
-            wait = self.min_send_interval - (now - self._last_sent_at)
+            last = self._last_sent_per_chat.get(jid or "", self._last_sent_at)
+            wait = self.min_send_interval - (now - last)
             if wait > 0:
                 time.sleep(wait)
-            self._last_sent_at = time.monotonic()
+            now = time.monotonic()
+            self._last_sent_at = now
+            if jid:
+                self._last_sent_per_chat[jid] = now
 
     def stop(self) -> None:
         self._closed = True

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.5.0
+
+- New APIs: `send_reaction`, `reply_message`.
+- HTTP API: `warnect serve` with bearer token, `/health`, `/qr`, `/send`.
+- Webhook delivery for incoming messages with optional HMAC signature (`X-Warnect-Signature`).
+- Per-chat rate limiting.
+- Tests: 10 Python + 9 Node (HTTP server coverage).
+
 ## 0.4.0
 
 - HTTP API mode: `warnect serve` (health, send, QR endpoints) with bearer token auth.

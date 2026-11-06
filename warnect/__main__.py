@@ -91,6 +91,7 @@ def cmd_serve(args: argparse.Namespace) -> int:
         port=args.port,
         token=args.token,
         webhook_url=args.webhook,
+        webhook_secret=args.webhook_secret,
     )
     client.on("qr", lambda qr: print("QR:", qr))
     client.on("ready", lambda data: print("ready:", data))
@@ -130,6 +131,7 @@ def build_parser() -> argparse.ArgumentParser:
     serve.add_argument("--port", type=int, default=8080)
     serve.add_argument("--token", default=None, help="Bearer token for /send")
     serve.add_argument("--webhook", default=None, help="Webhook URL for incoming messages")
+    serve.add_argument("--webhook-secret", default=None, help="HMAC secret for webhook signature")
     serve.set_defaults(func=cmd_serve)
     return parser
 

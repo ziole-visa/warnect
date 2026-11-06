@@ -92,6 +92,8 @@ client.stop()
 | `send_text(jid, text)` | Send text |
 | `send_image(jid, url=..., path=..., caption=...)` | Send image |
 | `send_document(jid, path, filename=..., mimetype=..., caption=...)` | Send document |
+| `send_reaction(jid, emoji, message_id)` | React to message |
+| `reply_message(jid, text, quoted_id)` | Reply to message |
 | `request_pairing_code(number)` | Pairing code login |
 | `send_presence(jid, presence)` | typing/paused/available |
 | `send_read(jid, message_id)` | Mark message as read |

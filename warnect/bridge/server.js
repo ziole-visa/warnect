@@ -271,6 +271,27 @@ async function handleCommand(req) {
         });
         break;
       }
+      case 'send_reaction': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        if (!req.messageId) throw new Error('message id is required');
+        const reactKey = { remoteJid: req.jid, id: req.messageId, fromMe: !!req.fromMe };
+        if (req.participant) reactKey.participant = req.participant;
+        await sock.sendMessage(req.jid, { react: { text: req.emoji || '', key: reactKey } });
+        respond(writeLine, id, { reacted: true, messageId: req.messageId });
+        break;
+      }
+      case 'reply_message': {
+        if (!sock) throw new Error('socket not started');
+        validateJid(req.jid);
+        validateText(req.text);
+        const quoted = messageStore.get(req.quotedId);
+        const options = {};
+        if (quoted) options.quoted = quoted;
+        await sock.sendMessage(req.jid, { text: req.text }, options);
+        respond(writeLine, id, { sent: true, jid: req.jid, quoted: !!quoted });
+        break;
+      }
       case 'logout': {
         if (sock) await sock.logout();
         respond(writeLine, id, { loggedOut: true });

@@ -44,6 +44,10 @@ rl.on('line', (line) => {
     write({ type: 'response', id, ok: true, data: { group: { id: '123@g.us', subject: req.subject } } });
   } else if (cmd === 'group_add_participants') {
     write({ type: 'response', id, ok: true, data: { result: [{ status: '200' }] } });
+  } else if (cmd === 'list_methods') {
+    write({ type: 'response', id, ok: true, data: { methods: ['sendMessage', 'groupCreate'] } });
+  } else if (cmd === 'invoke') {
+    write({ type: 'response', id, ok: true, data: { method: req.method, result: { echoed: req.args } } });
   } else if (cmd === 'slow') {
     // intentionally never responds
   } else if (cmd === 'stop') {

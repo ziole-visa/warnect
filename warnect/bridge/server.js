@@ -56,6 +56,26 @@ function storeMessage(msg) {
   }
 }
 
+function safeSerialize(value, seen = new WeakSet()) {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (typeof value === 'bigint') return value.toString();
+  if (value instanceof Date) return value.toISOString();
+  if (Buffer.isBuffer(value)) return { _type: 'buffer', base64: value.toString('base64'), size: value.length };
+  if (Array.isArray(value)) return value.map((v) => safeSerialize(v, seen));
+  if (typeof value === 'object') {
+    if (seen.has(value)) return { _type: 'circular' };
+    seen.add(value);
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (typeof v === 'function') continue;
+      out[k] = safeSerialize(v, seen);
+    }
+    return out;
+  }
+  return String(value);
+}
+
 function parseIncoming(msg) {
   const m = msg.message || {};
   const type = getContentType(m);
@@ -94,6 +114,34 @@ async function connect() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    const forwardedEvents = [
+      'messages.update',
+      'messages.delete',
+      'messages.reaction',
+      'message-receipt.update',
+      'presence.update',
+      'chats.upsert',
+      'chats.update',
+      'chats.delete',
+      'contacts.upsert',
+      'contacts.update',
+      'groups.upsert',
+      'groups.update',
+      'group-participants.update',
+      'call',
+      'labels.association',
+      'labels.edit',
+    ];
+    for (const ev of forwardedEvents) {
+      try {
+        sock.ev.on(ev, (data) => {
+          try { emit(ev, safeSerialize(data)); } catch (e) { log('debug', 'event serialize failed', ev, e?.message); }
+        });
+      } catch (e) {
+        log('debug', 'cannot register event', ev, e?.message);
+      }
+    }
 
     sock.ev.on('connection.update', (update) => {
       if (update.qr) emit('qr', update.qr);
@@ -371,6 +419,26 @@ async function handleCommand(req) {
         validateJid(req.jid);
         const code = await sock.groupRevokeInvite(req.jid);
         respond(writeLine, id, { code });
+        break;
+      }
+      case 'list_methods': {
+        if (!sock) throw new Error('socket not started');
+        const methods = Object.keys(sock)
+          .filter((k) => typeof sock[k] === 'function')
+          .sort();
+        respond(writeLine, id, { methods });
+        break;
+      }
+      case 'invoke': {
+        if (!sock) throw new Error('socket not started');
+        if (typeof req.method !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(req.method)) {
+          throw new Error('invalid method name');
+        }
+        const fn = sock[req.method];
+        if (typeof fn !== 'function') throw new Error(`socket has no method ${req.method}`);
+        const args = Array.isArray(req.args) ? req.args : [];
+        const result = await fn(...args);
+        respond(writeLine, id, { method: req.method, result: safeSerialize(result) });
         break;
       }
       case 'logout': {

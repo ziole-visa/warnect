@@ -108,6 +108,20 @@ client.stop()
 | `group_demote(jid, participants)` | Demote |
 | `group_leave(jid)` | Leave group |
 | `group_invite_code(jid)` | Get invite code |
+
+## Full Baileys parity
+
+```python
+# Call any socket method directly
+methods = client.list_methods()
+print(methods[:10])
+
+# Generic call
+client.invoke("sendMessage", "123@s.whatsapp.net", {"text": "hi"})
+
+# Dynamic snake_case -> camelCase
+client.send_message("123@s.whatsapp.net", {"text": "hi"})
+```
 | `logout()` | Log out session |
 | `stop()` | Stop bridge |
 

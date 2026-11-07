@@ -63,6 +63,10 @@ def test_extra_commands(client):
     assert client.get_profile_picture("123@s.whatsapp.net")["url"] == "https://example.com/p.jpg"
     assert client.get_groups()["total"] == 0
     assert client.is_on_whatsapp("6281234567890")["exists"] is True
+    assert client.list_methods() == ["sendMessage", "groupCreate"]
+    assert client.invoke("echo", 1, 2)["result"]["echoed"] == [1, 2]
+    # dynamic caller converts snake_case to camelCase
+    assert client.group_create("Grup", ["123@s.whatsapp.net"])["group"]["id"] == "123@g.us"
     assert client.send_reaction("123@s.whatsapp.net", "👍", "MSG1")["reacted"] is True
     assert client.reply_message("123@s.whatsapp.net", "balas", "MSG1")["quoted"] is True
     assert client.group_create("Grup", ["123@s.whatsapp.net"])["group"]["id"] == "123@g.us"

@@ -315,6 +315,32 @@ class BaileysClient:
         self._rate_limit(jid)
         return self._retry_request("reply_message", jid=jid, text=text, quotedId=quoted_id)
 
+    def invoke(self, method: str, *args: Any) -> Any:
+        """Call any method on the underlying Baileys socket."""
+        return self.request("invoke", method=method, args=list(args))
+
+    def list_methods(self) -> list[str]:
+        data = self.request("list_methods")
+        return (data or {}).get("methods", [])
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        camel = "".join(
+            part.capitalize() if i > 0 else part for i, part in enumerate(name.split("_"))
+        )
+        if not camel or camel == name and "_" not in name:
+            # allow direct camelCase names too
+            pass
+
+        def caller(*args: Any, **kwargs: Any) -> Any:
+            call_args = list(args)
+            if kwargs:
+                call_args.append(kwargs)
+            return self.invoke(camel, *call_args)
+
+        return caller
+
     def group_create(self, subject: str, participants: list[str]) -> Any:
         return self.request("group_create", subject=subject, participants=participants)
 

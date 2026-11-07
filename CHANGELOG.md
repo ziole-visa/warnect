@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0
+
+- Generic `invoke(method, *args)` and `list_methods()` for full Baileys socket parity.
+- Dynamic snake_case -> camelCase method caller.
+- Forwarding of common Baileys events (messages.update, presence, groups, chats, contacts, calls, labels).
+- Safe serializer for Baileys return values (Buffer, BigInt, Date).
+- 11 Python tests + 9 Node tests.
+
 ## 0.6.0
 
 - Multi-session manager (`SessionManager`) for running many accounts in one process.

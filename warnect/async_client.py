@@ -79,6 +79,12 @@ class AsyncBaileysClient:
     async def group_create(self, subject: str, participants: list) -> Any:
         return await asyncio.to_thread(self._client.group_create, subject, participants)
 
+    async def invoke(self, method: str, *args: Any) -> Any:
+        return await asyncio.to_thread(self._client.invoke, method, *args)
+
+    async def list_methods(self) -> list[str]:
+        return await asyncio.to_thread(self._client.list_methods)
+
     async def get_groups(self, limit: int = 100) -> Any:
         return await asyncio.to_thread(self._client.get_groups, limit)
 

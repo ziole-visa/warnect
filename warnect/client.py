@@ -31,6 +31,7 @@ class BaileysClient:
         request_timeout: float = 30.0,
         min_send_interval: float = 0.5,
         auto_install: bool = True,
+        auto_restart: bool = True,
         config: Optional["WarnectConfig"] = None,
     ) -> None:
         if config is not None:
@@ -48,6 +49,7 @@ class BaileysClient:
         self.request_timeout = request_timeout
         self.min_send_interval = min_send_interval
         self.auto_install = auto_install
+        self.auto_restart = auto_restart
 
         self.proc: Optional[subprocess.Popen] = None
         self._closed = False
@@ -433,6 +435,8 @@ class BaileysClient:
         }
 
     def _schedule_restart(self) -> None:
+        if not self.auto_restart:
+            return
         with self._restart_lock:
             if self._closed or self._restarting:
                 return

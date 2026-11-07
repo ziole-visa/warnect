@@ -9,6 +9,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import hmac
+import logging
 import os
 import queue
 import time
@@ -43,6 +45,7 @@ class WarnectHTTPServer:
         self._webhook_queue: "queue.Queue[Optional[dict]]" = queue.Queue()
         self._webhook_thread = threading.Thread(target=self._webhook_worker, daemon=True)
         self._httpd: Optional[ThreadingHTTPServer] = None
+        self.logger = logging.getLogger("warnect.http")
 
         client.on("connection", self._on_connection)
         client.on("qr", self._on_qr)
@@ -81,7 +84,7 @@ class WarnectHTTPServer:
                         break
                 except Exception as exc:  # pragma: no cover - network dependent
                     if attempt == 2:
-                        print(f"[warnect-http] webhook delivery failed: {exc}")
+                        self.logger.warning("webhook delivery failed: %s", exc)
                     else:
                         time.sleep(0.5 * (2 ** attempt))
 
@@ -93,7 +96,8 @@ class WarnectHTTPServer:
 
         handler = self._make_handler()
         self._httpd = ThreadingHTTPServer((self.host, self.port), handler)
-        print(f"[warnect-http] listening on http://{self.host}:{self.port}")
+        self._httpd.timeout = 30
+        self.logger.info("listening on http://%s:%s", self.host, self.port)
         self._httpd.serve_forever()
 
     def stop(self) -> None:
@@ -118,9 +122,10 @@ class WarnectHTTPServer:
 
             def _auth_ok(self) -> bool:
                 if not server.token:
-                    return True
+                    return server.host in ("127.0.0.1", "localhost", "::1")
                 header = self.headers.get("Authorization", "")
-                return header == f"Bearer {server.token}"
+                expected = f"Bearer {server.token}"
+                return hmac.compare_digest(header.encode("utf-8"), expected.encode("utf-8"))
 
             def do_GET(self) -> None:  # noqa: N802
                 if self.path == "/health":
@@ -142,6 +147,9 @@ class WarnectHTTPServer:
                     return
                 try:
                     length = int(self.headers.get("Content-Length", "0"))
+                    if length > 1_048_576:
+                        self._send(413, {"ok": False, "error": "request too large"})
+                        return
                     raw = self.rfile.read(length) if length > 0 else b"{}"
                     payload = json.loads(raw.decode("utf-8") or "{}")
                 except Exception:

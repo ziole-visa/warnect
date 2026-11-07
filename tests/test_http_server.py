@@ -56,5 +56,26 @@ def test_http_health_and_send(tmp_path):
         data = json.loads(resp.read())
     assert data["ok"] is True
 
+    # QR endpoint requires auth
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/qr")
+    try:
+        urllib.request.urlopen(req)
+        raise AssertionError("expected 401 for /qr without token")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 401
+
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/qr", headers={"Authorization": "Bearer secret"})
+    with urllib.request.urlopen(req) as resp:
+        data = json.loads(resp.read())
+    assert data["ok"] is True
+
+    # non-loopback without token must fail to start
+    bad_server = WarnectHTTPServer(client, host="0.0.0.0", port=0)
+    try:
+        bad_server.start()
+        raise AssertionError("expected ValueError")
+    except ValueError:
+        pass
+
     server.stop()
     thread.join(timeout=5)

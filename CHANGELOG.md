@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.2
+
+Audit-driven stability and security patch:
+
+- Bridge auto-restart now clears stale process references and increments restart counter.
+- HTTP `/qr` requires authentication; non-loopback binding requires a token.
+- HTTP request size limit (1 MB) and 30s timeout.
+- Async API parity: `off()`, group management, reactions, replies, media, presence, pairing.
+- Conditional `tomli` dependency for Python < 3.11.
+- Structured logging in HTTP server.
+- New tests: bridge lifecycle, HTTP authentication.
+- Config manager via env/TOML/dataclass.
+- Documentation: configuration and migration guides.
+
 ## 0.8.1
 
 Audit fixes based on static review:

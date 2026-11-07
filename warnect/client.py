@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .config import WarnectConfig
+from .router import CommandRouter
 from .events import wrap_event
 from .exceptions import BridgeCrashed, BridgeError, BridgeTimeout
 
@@ -65,6 +66,7 @@ class BaileysClient:
         self._last_sent_at = 0.0
         self._last_sent_per_chat: Dict[str, float] = {}
 
+        self._router = CommandRouter(self)
         self._dispatch_queue: "queue.Queue[tuple]" = queue.Queue()
         self._dispatcher_thread: Optional[threading.Thread] = None
         self._reader_thread: Optional[threading.Thread] = None
@@ -100,7 +102,13 @@ class BaileysClient:
                 continue
             if event == "connection" and isinstance(data, dict):
                 self._connected = data.get("status") == "open"
-            self._emit(event, wrap_event(event, data))
+            wrapped = wrap_event(event, data)
+            self._emit(event, wrapped)
+            if event == "message" and self._router.enabled:
+                try:
+                    self._router.dispatch(wrapped)
+                except Exception:
+                    self.logger.exception("router dispatch failed")
 
     # ------------------------------------------------------------------ process
 
@@ -419,6 +427,15 @@ class BaileysClient:
             self._last_sent_at = now
             if jid:
                 self._last_sent_per_chat[jid] = now
+
+    def command(self, name: str, aliases=(), priority: int = 0):
+        return self._router.command(name, aliases=aliases, priority=priority)
+
+    def middleware(self, func):
+        return self._router.middleware(func)
+
+    def enable_router(self):
+        self._router.enable()
 
     @property
     def connected(self) -> bool:

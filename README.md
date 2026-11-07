@@ -206,6 +206,26 @@ docker compose up --build
 
 The `auth/` directory is mounted as a volume so sessions persist.
 
+## Middleware & command router (optional)
+
+```python
+client = BaileysClient(auth_dir="auth")
+
+@client.middleware
+def only_text(ctx):
+    if not ctx.text:
+        return False
+
+@client.command("ping", aliases=["p"], priority=10)
+def ping(ctx):
+    ctx.reply_sync("pong")
+
+client.enable_router()
+client.start()
+```
+
+Basic usage does not require the router. The router is opt-in.
+
 ## License
 
 MIT

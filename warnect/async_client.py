@@ -128,6 +128,15 @@ class AsyncBaileysClient:
     async def group_revoke_invite(self, jid: str) -> Any:
         return await asyncio.to_thread(self._client.group_revoke_invite, jid)
 
+    def command(self, name: str, aliases=(), priority: int = 0):
+        return self._client.command(name, aliases=aliases, priority=priority)
+
+    def middleware(self, func):
+        return self._client.middleware(func)
+
+    def enable_router(self):
+        self._client.enable_router()
+
     async def get_groups(self, limit: int = 100) -> Any:
         return await asyncio.to_thread(self._client.get_groups, limit)
 

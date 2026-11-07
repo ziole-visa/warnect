@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.9.0
+
+- Optional middleware and command router.
+- `client.command()`, `client.middleware()`, `client.enable_router()`.
+- MessageContext with `reply_sync`, `reply`, `download_media`.
+- Command aliases, priority, middleware chain.
+- 20 Python tests + 9 Node tests.
+
 ## 0.8.2
 
 Audit-driven stability and security patch:

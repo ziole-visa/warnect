@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.1
+
+Audit fixes based on static review:
+
+- Bridge auto-restart clears stale process reference and increments restart counter.
+- HTTP `/qr` now requires authentication; non-loopback bind requires a token.
+- Async client now implements `off()` and all sync methods (groups, reactions, replies, media, etc.).
+- Conditional dependency `tomli` for Python < 3.11.
+- Documentation: configuration guide and v7->v8 migration guide.
+- README updated with configuration and typed events.
+
 ## 0.8.0
 
 - Typed event payloads (MessageEvent, ConnectionEvent, QREvent) with dict + attribute access.

@@ -16,6 +16,7 @@ class AsyncBaileysClient:
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._client = BaileysClient(*args, **kwargs)
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._handler_map: dict[str, list[tuple[Callable, Callable]]] = {}
 
     def on(self, event: str, callback: Callable) -> None:
         def handler(data: Any) -> None:
@@ -28,10 +29,15 @@ class AsyncBaileysClient:
                 callback(data)
 
         self._client.on(event, handler)
+        self._handler_map.setdefault(event, []).append((callback, handler))
 
     def off(self, event: str, callback: Callable) -> None:
-        # Best-effort: remove by matching the original callback is not tracked.
-        raise NotImplementedError("off() is not supported on AsyncBaileysClient yet")
+        entries = self._handler_map.get(event, [])
+        for original, handler in list(entries):
+            if original is callback:
+                self._client.off(event, handler)
+                entries.remove((original, handler))
+        self._handler_map[event] = entries
 
     async def start(self, wait: bool = True, timeout: Optional[float] = None) -> Any:
         self._loop = asyncio.get_running_loop()
@@ -91,6 +97,36 @@ class AsyncBaileysClient:
     @property
     def connected(self) -> bool:
         return self._client.connected
+
+    async def group_create(self, subject: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_create, subject, participants)
+
+    async def group_update_subject(self, jid: str, subject: str) -> Any:
+        return await asyncio.to_thread(self._client.group_update_subject, jid, subject)
+
+    async def group_update_description(self, jid: str, description: str) -> Any:
+        return await asyncio.to_thread(self._client.group_update_description, jid, description)
+
+    async def group_add_participants(self, jid: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_add_participants, jid, participants)
+
+    async def group_remove_participants(self, jid: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_remove_participants, jid, participants)
+
+    async def group_promote(self, jid: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_promote, jid, participants)
+
+    async def group_demote(self, jid: str, participants: list) -> Any:
+        return await asyncio.to_thread(self._client.group_demote, jid, participants)
+
+    async def group_leave(self, jid: str) -> Any:
+        return await asyncio.to_thread(self._client.group_leave, jid)
+
+    async def group_invite_code(self, jid: str) -> Any:
+        return await asyncio.to_thread(self._client.group_invite_code, jid)
+
+    async def group_revoke_invite(self, jid: str) -> Any:
+        return await asyncio.to_thread(self._client.group_revoke_invite, jid)
 
     async def get_groups(self, limit: int = 100) -> Any:
         return await asyncio.to_thread(self._client.get_groups, limit)

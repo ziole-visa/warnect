@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "warnect"
-version = "0.8.0"
+version = "0.8.1"
 description = "Python interface to arsya-baileys-open (WhatsApp Web) via a local Node.js bridge"
 readme = "README.md"
 requires-python = ">=3.10"
+dependencies = ["tomli>=2.0; python_version < '3.11'"]
 license = { text = "MIT" }
 authors = [{ name = "Arsya" }]
 keywords = ["whatsapp", "baileys", "warnect", "automation", "bot"]

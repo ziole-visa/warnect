@@ -86,6 +86,8 @@ class WarnectHTTPServer:
                         time.sleep(0.5 * (2 ** attempt))
 
     def start(self) -> None:
+        if self.host not in ("127.0.0.1", "localhost", "::1") and not self.token:
+            raise ValueError("HTTP token is required when binding to a non-loopback address")
         self.client.start()
         self._webhook_thread.start()
 
@@ -124,6 +126,9 @@ class WarnectHTTPServer:
                 if self.path == "/health":
                     self._send(200, {"ok": True, "connected": server._connected})
                 elif self.path == "/qr":
+                    if not self._auth_ok():
+                        self._send(401, {"ok": False, "error": "unauthorized"})
+                        return
                     self._send(200, {"ok": True, "qr": server._last_qr})
                 else:
                     self._send(404, {"ok": False, "error": "not found"})

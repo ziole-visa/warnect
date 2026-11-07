@@ -198,6 +198,7 @@ class BaileysClient:
             item["error"] = BridgeCrashed("bridge process exited")
             item["event"].set()
         if not self._closed:
+            self.proc = None
             self._dispatch_queue.put(("error", {"code": "bridge_exited", "message": "bridge process exited"}))
             self._schedule_restart()
 
@@ -436,6 +437,7 @@ class BaileysClient:
             if self._closed or self._restarting:
                 return
             self._restarting = True
+            self._restart_count += 1
         threading.Thread(target=self._restart_worker, daemon=True).start()
 
     def _restart_worker(self) -> None:
@@ -456,7 +458,6 @@ class BaileysClient:
             try:
                 self.start()
                 with self._restart_lock:
-                    self._restart_count = 0
                     self._restarting = False
                 self.logger.info("bridge restarted successfully")
                 return

@@ -1,5 +1,6 @@
 import base64
 import json
+import logging
 import os
 import queue
 import subprocess
@@ -9,6 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
+from .config import WarnectConfig
+from .events import wrap_event
 from .exceptions import BridgeCrashed, BridgeError, BridgeTimeout
 
 
@@ -28,7 +31,14 @@ class BaileysClient:
         request_timeout: float = 30.0,
         min_send_interval: float = 0.5,
         auto_install: bool = True,
+        config: Optional["WarnectConfig"] = None,
     ) -> None:
+        if config is not None:
+            auth_dir = config.auth_dir
+            log_level = config.log_level
+            min_send_interval = config.min_send_interval
+            request_timeout = config.request_timeout
+            auto_install = config.auto_install
         if bridge_script is None:
             bridge_script = str(Path(__file__).resolve().parent / "bridge" / "server.js")
         self.auth_dir = str(auth_dir)
@@ -42,6 +52,9 @@ class BaileysClient:
         self.proc: Optional[subprocess.Popen] = None
         self._closed = False
 
+        self.logger = logging.getLogger(f"warnect.{id(self)}")
+        self._connected = False
+
         self._handlers: Dict[str, List[Callable]] = {}
         self._pending: Dict[str, dict] = {}
         self._pending_lock = threading.Lock()
@@ -54,6 +67,10 @@ class BaileysClient:
         self._dispatcher_thread: Optional[threading.Thread] = None
         self._reader_thread: Optional[threading.Thread] = None
         self._stderr_thread: Optional[threading.Thread] = None
+
+        self._restart_count = 0
+        self._restarting = False
+        self._restart_lock = threading.Lock()
 
     # ------------------------------------------------------------------ events
 
@@ -71,7 +88,7 @@ class BaileysClient:
             try:
                 cb(data)
             except Exception as exc:  # pragma: no cover - user callback
-                print(f"[warnect] callback error on {event}: {exc}")
+                self.logger.exception("callback error on %s", event)
 
     def _dispatch_loop(self) -> None:
         while not self._closed:
@@ -79,7 +96,9 @@ class BaileysClient:
                 event, data = self._dispatch_queue.get(timeout=0.5)
             except queue.Empty:
                 continue
-            self._emit(event, data)
+            if event == "connection" and isinstance(data, dict):
+                self._connected = data.get("status") == "open"
+            self._emit(event, wrap_event(event, data))
 
     # ------------------------------------------------------------------ process
 
@@ -98,7 +117,7 @@ class BaileysClient:
             raise BridgeCrashed(
                 "Node dependencies are missing. Run `npm install` in " + str(bridge_dir)
             )
-        print("[warnect] Installing Node dependencies (first run)...")
+        self.logger.info("Installing Node dependencies (first run)...")
         lockfile = bridge_dir / "package-lock.json"
         cmd = ["npm", "ci", "--omit=dev", "--no-audit", "--no-fund"]
         if not lockfile.exists():
@@ -149,7 +168,7 @@ class BaileysClient:
         for line in self.proc.stderr:
             line = line.rstrip()
             if line:
-                print(line)
+                self.logger.debug("bridge stderr: %s", line)
 
     def _read_loop(self) -> None:
         assert self.proc and self.proc.stdout
@@ -180,6 +199,7 @@ class BaileysClient:
             item["event"].set()
         if not self._closed:
             self._dispatch_queue.put(("error", {"code": "bridge_exited", "message": "bridge process exited"}))
+            self._schedule_restart()
 
     # ------------------------------------------------------------------ rpc
 
@@ -396,6 +416,55 @@ class BaileysClient:
             self._last_sent_at = now
             if jid:
                 self._last_sent_per_chat[jid] = now
+
+    @property
+    def connected(self) -> bool:
+        return self._connected
+
+    def health(self) -> dict:
+        alive = self.proc is not None and self.proc.poll() is None
+        return {
+            "connected": self._connected,
+            "bridge_alive": alive,
+            "pid": getattr(self.proc, "pid", None) if alive else None,
+            "restarts": self._restart_count,
+            "pending_requests": len(self._pending),
+        }
+
+    def _schedule_restart(self) -> None:
+        with self._restart_lock:
+            if self._closed or self._restarting:
+                return
+            self._restarting = True
+        threading.Thread(target=self._restart_worker, daemon=True).start()
+
+    def _restart_worker(self) -> None:
+        max_attempts = 10
+        for attempt in range(1, max_attempts + 1):
+            if self._closed:
+                with self._restart_lock:
+                    self._restarting = False
+                return
+            delay = min(30.0, 1.0 * (2 ** (attempt - 1)))
+            self.logger.warning("bridge restart attempt %d/%d in %.1fs", attempt, max_attempts, delay)
+            self._dispatch_queue.put(("reconnect", {"attempt": attempt, "delay": int(delay * 1000)}))
+            time.sleep(delay)
+            if self._closed:
+                with self._restart_lock:
+                    self._restarting = False
+                return
+            try:
+                self.start()
+                with self._restart_lock:
+                    self._restart_count = 0
+                    self._restarting = False
+                self.logger.info("bridge restarted successfully")
+                return
+            except Exception as exc:
+                self.logger.warning("bridge restart failed: %s", exc)
+        self._dispatch_queue.put(("error", {"code": "bridge_restart_failed", "message": "max restart attempts reached"}))
+        with self._restart_lock:
+            self._restarting = False
 
     def stop(self) -> None:
         self._closed = True

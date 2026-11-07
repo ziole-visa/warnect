@@ -85,6 +85,13 @@ class AsyncBaileysClient:
     async def list_methods(self) -> list[str]:
         return await asyncio.to_thread(self._client.list_methods)
 
+    async def health(self) -> Any:
+        return await asyncio.to_thread(self._client.health)
+
+    @property
+    def connected(self) -> bool:
+        return self._client.connected
+
     async def get_groups(self, limit: int = 100) -> Any:
         return await asyncio.to_thread(self._client.get_groups, limit)
 

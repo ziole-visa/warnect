@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.8.0
+
+- Typed event payloads (MessageEvent, ConnectionEvent, QREvent) with dict + attribute access.
+- Connection health API (`client.health()`, `client.connected`).
+- Bridge auto-restart with exponential backoff.
+- Structured logging via Python logging.
+- Config manager: env vars, TOML, dataclass.
+- 15 Python tests + 9 Node tests.
+
 ## 0.7.0
 
 - Generic `invoke(method, *args)` and `list_methods()` for full Baileys socket parity.
